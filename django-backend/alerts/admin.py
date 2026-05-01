@@ -1,3 +1,6 @@
 from django.contrib import admin
+from .models import Alert, IPProfile, DetectionRule
 
-# Register your models here.
+admin.site.register(Alert)
+admin.site.register(IPProfile)
+admin.site.register(DetectionRule)
