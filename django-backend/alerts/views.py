@@ -23,7 +23,7 @@ class AlertViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
         from .tasks import process_incoming_alert
-        process_incoming_alert.delay(request.data)
+        process_incoming_alert.apply_async(args=[request.data])
 
         return Response({'status': 'received'}, status=status.HTTP_200_OK)
 

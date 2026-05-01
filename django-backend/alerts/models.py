@@ -1,10 +1,10 @@
 from django.db import models
 
 # Create your models here.
-from django.db import models
+from django_lifecycle import LifecycleModelMixin
+from .hooks import AlertHooksMixin
 
-
-class Alert(models.Model):
+class Alert(AlertHooksMixin, LifecycleModelMixin, models.Model):
     SEVERITY_CHOICES = [
         ('low', 'Low'),
         ('medium', 'Medium'),
