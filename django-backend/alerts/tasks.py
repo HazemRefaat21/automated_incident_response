@@ -1,9 +1,7 @@
-from celery import shared_task
 import logging
 logger = logging.getLogger(__name__)
 
 
-@shared_task
 def process_incoming_alert(alert_data: dict):
     logger.info(f"Processing alert: {alert_data.get('id', 'unknown')}")
     try:

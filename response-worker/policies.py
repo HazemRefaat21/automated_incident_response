@@ -8,7 +8,7 @@ POLICIES = {
     'critical': {
         'block_ip':      True,
         'block_duration': 24,    # hours
-        'kill_process':  True,
+        'kill_process':  False,
         'notify':        True,
     },
     'high': {

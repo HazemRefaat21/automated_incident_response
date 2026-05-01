@@ -18,11 +18,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'django_filters',
-    'django_celery_beat',
     # Our apps
     'alerts',
     'responses',
     'classification',
+    'django_tasks_db',
 ]
 
 MIDDLEWARE = [
@@ -105,16 +105,13 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
-# Celery
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/1')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Africa/Cairo'
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Wazuh
 WAZUH_API_URL = config('WAZUH_API_URL', default='https://127.0.0.1:55000')
 WAZUH_API_USER = config('WAZUH_API_USER', default='admin')
 WAZUH_INTEGRATION_SECRET = config('WAZUH_INTEGRATION_SECRET', default='change-me')
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend"
+    }
+}

@@ -35,7 +35,8 @@ class AlertViewSet(viewsets.ModelViewSet):
             alert_data['data']['real_ip'] = real_ip
 
         from .tasks import process_incoming_alert
-        process_incoming_alert.apply_async(args=[alert_data])
+        process_incoming_alert(alert_data)
+
 
         return Response({'status': 'received'}, status=status.HTTP_200_OK)
 

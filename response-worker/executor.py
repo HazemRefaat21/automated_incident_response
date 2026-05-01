@@ -11,11 +11,11 @@ from response_worker.policies import get_policy
 from response_worker.actions.block_ip import block_ip
 from response_worker.actions.kill_process import find_suspicious_processes, kill_process
 from response_worker.actions.notify import notify
+from django.tasks import task
 
-logger = logging.getLogger(__name__)
 
-
-def execute_response(alert) -> list:
+@task()
+def execute_response(alert_id: int) -> list:
     """
     Execute response actions for an alert.
     Returns list of ResponseAction results.
@@ -25,6 +25,9 @@ def execute_response(alert) -> list:
     try:
         from responses.models import ResponseAction
         from django.utils import timezone
+        from alerts.models import Alert
+
+        alert = Alert.objects.get(id=alert_id)
 
         # جيب الـ IP threat score
         threat_score = 0
@@ -39,10 +42,7 @@ def execute_response(alert) -> list:
         # جيب الـ policy
         policy = get_policy(alert.severity, threat_score)
 
-        logger.info(
-            f"Executing response for Alert {alert.id} "
-            f"[{alert.severity}] — policy: {policy}"
-        )
+
 
         # ========================
         # Action 1: Block IP
@@ -60,7 +60,6 @@ def execute_response(alert) -> list:
             action.executed_at    = timezone.now()
             action.save()
             results.append(result)
-            logger.info(f"Block IP result: {result}")
 
         # ========================
         # Action 2: Kill Process (critical only)
@@ -103,8 +102,7 @@ def execute_response(alert) -> list:
         Alert.objects.filter(pk=alert.pk).update(status='resolved')
 
     except Exception as e:
-        logger.error(f"Response execution error: {e}", exc_info=True)
-
+        ...
     return results
 
 

@@ -87,10 +87,6 @@ class AlertHooksMixin:
     def on_processing_respond(self):
         try:
             from response_worker.executor import execute_response
-
-            logger.info(f"[RESPOND] Alert {self.pk} [{self.severity}]")
-            results = execute_response(self)
-            logger.info(f"[RESPOND] {len(results)} actions executed")
-
+            results = execute_response.enqueue(self.id)
         except Exception as e:
             logger.error(f"[RESPOND] Hook error: {e}", exc_info=True)

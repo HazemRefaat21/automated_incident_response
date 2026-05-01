@@ -4,10 +4,22 @@ from django.urls import path
 from django.http import HttpResponseRedirect
 from django.contrib import messages
 from .models import Alert, IPProfile, DetectionRule
+from django_tasks_db.models import DBTaskResult
 
 class AlertAdmin(admin.ModelAdmin):
     search_fields = ('rule_description','raw_log')
 
+# @admin.register(DBTaskResult)
+# class TaskResultAdmin(admin.ModelAdmin):
+#     list_display = ["id", "task_path", "status", "enqueued_at", "finished_at"]
+#     list_filter = ["status"]
+#     search_fields = ["id", "task_path"]
+#     readonly_fields = [
+#         "id", "task_path", "status",
+#         "args_kwargs", "enqueued_at",
+#         "finished_at", "return_value", "exception_class"
+#     ]
+#     ordering = ["-enqueued_at"]
 
 admin.site.register(Alert, AlertAdmin)
 @admin.register(IPProfile)
