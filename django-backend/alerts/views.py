@@ -17,13 +17,25 @@ class AlertViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def ingest(self, request):
-        """Wazuh integration endpoint."""
         secret = request.headers.get('X-Wazuh-Secret', '')
         if secret != settings.WAZUH_INTEGRATION_SECRET:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
+        # استخرج الـ real IP هنا في الـ view
+        real_ip = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or
+            request.META.get('REMOTE_ADDR') or
+            None
+        )
+
+        # ضيف الـ real IP في الـ data قبل ما تبعتها للـ task
+        alert_data = request.data.copy()
+        if real_ip and not alert_data.get('data', {}).get('srcip'):
+            alert_data.setdefault('data', {})
+            alert_data['data']['real_ip'] = real_ip
+
         from .tasks import process_incoming_alert
-        process_incoming_alert.apply_async(args=[request.data])
+        process_incoming_alert.apply_async(args=[alert_data])
 
         return Response({'status': 'received'}, status=status.HTTP_200_OK)
 

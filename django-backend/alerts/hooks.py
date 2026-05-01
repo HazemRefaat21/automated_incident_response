@@ -3,21 +3,20 @@ import logging
 
 sys.path.insert(0, '/home/hazem/automated_incident_response')
 
-from django_lifecycle import hook, AFTER_CREATE
+from django_lifecycle import hook, AFTER_CREATE, AFTER_UPDATE
 
 logger = logging.getLogger(__name__)
 
 DESCRIPTION_TO_ATTACK_TYPE = [
-    ('sql injection',     'sql_injection'),
-    ('xss',               'xss'),
-    ('traversal',         'traversal'),
-    ('command injection', 'command_injection'),
-    ('brute force',       'brute_force'),
-    ('flood',             'dos'),
-    ('admin panel',       'scanning'),
-    ('scanner',           'scanning'),
-    ('scanning',          'scanning'),
-    ('ssh',               'brute_force'),
+    ('sql injection',      'sql_injection'),
+    ('xss',                'xss'),
+    ('directory traversal','traversal'),
+    ('command injection',  'command_injection'),
+    ('ssh brute force',    'brute_force'),
+    ('ssh root',           'brute_force'),
+    ('admin panel',        'scanning'),
+    ('suspicious scanner', 'scanning'),
+    ('scanning',           'scanning'),
 ]
 
 ATTACK_SCORES = {
@@ -61,32 +60,37 @@ class AlertHooksMixin:
     @hook(AFTER_CREATE)
     def on_create_classify(self):
         try:
-            # 1. حدد الـ attack type من الـ description
             attack_type = get_attack_type(self.rule_description or '')
+            base_score  = ATTACK_SCORES.get(attack_type, ATTACK_SCORES['unknown'])
 
-            # 2. جيب الـ base score
-            base_score = ATTACK_SCORES.get(attack_type, ATTACK_SCORES['unknown'])
-
-            # 3. bonus من الـ rule level
             level = self.rule_level or 0
             if level >= 12:   bonus = 15
             elif level >= 8:  bonus = 10
             elif level >= 4:  bonus = 5
             else:             bonus = 0
 
-            score = min(base_score + bonus, 100)
-
-            # 4. حدد الـ severity
+            score    = min(base_score + bonus, 100)
             severity = get_severity(score)
 
-            # 5. update الـ alert
-            type(self).objects.filter(pk=self.pk).update(
-                attack_type=attack_type,
-                severity=severity,
-                status='processing',
-            )
+            # استخدم .save() عشان يشغّل الـ AFTER_UPDATE hook
+            self.attack_type = attack_type
+            self.severity    = severity
+            self.status      = 'processing'
+            self.save()
 
-            logger.info(f"Alert {self.pk}: {attack_type} → {severity} (score={score})")
+            logger.info(f"[CLASSIFY] Alert {self.pk}: {attack_type} → {severity} (score={score})")
 
         except Exception as e:
-            logger.error(f"Hook error: {e}", exc_info=True)
+            logger.error(f"[CLASSIFY] Hook error: {e}", exc_info=True)
+
+    @hook(AFTER_UPDATE, when='status', has_changed=True, is_now='processing')
+    def on_processing_respond(self):
+        try:
+            from response_worker.executor import execute_response
+
+            logger.info(f"[RESPOND] Alert {self.pk} [{self.severity}]")
+            results = execute_response(self)
+            logger.info(f"[RESPOND] {len(results)} actions executed")
+
+        except Exception as e:
+            logger.error(f"[RESPOND] Hook error: {e}", exc_info=True)

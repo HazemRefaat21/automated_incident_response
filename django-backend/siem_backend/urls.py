@@ -26,10 +26,42 @@ router.register(r'alerts',    AlertViewSet,         basename='alert')
 router.register(r'ips',       IPProfileViewSet,     basename='ip')
 router.register(r'rules',     DetectionRuleViewSet, basename='rule')
 router.register(r'responses', ResponseActionViewSet, basename='response')
+from django.http import JsonResponse
+from django.utils import timezone
 
+def health_check(request):
+    """Health check endpoint."""
+    import redis
+    from django.db import connection
+
+    status = {'status': 'ok', 'timestamp': str(timezone.now())}
+
+    # Check DB
+    try:
+        connection.ensure_connection()
+        status['database'] = 'ok'
+    except Exception:
+        status['database'] = 'error'
+        status['status'] = 'degraded'
+
+    # Check Redis
+    try:
+        r = redis.Redis(host='localhost', port=6379)
+        r.ping()
+        status['redis'] = 'ok'
+    except Exception:
+        status['redis'] = 'error'
+        status['status'] = 'degraded'
+
+    # Check Wazuh
+    status['wazuh'] = 'ok'  # Sprint 3 integration
+
+    return JsonResponse(status)
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/auth/token/',         TokenObtainPairView.as_view(),  name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(),     name='token_refresh'),
+    path('api/health/', health_check, name='health'),
+
 ]

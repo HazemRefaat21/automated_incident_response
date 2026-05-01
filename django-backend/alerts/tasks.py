@@ -19,7 +19,12 @@ def process_incoming_alert(alert_data: dict):
         rule      = alert_data.get('rule', {})
         agent     = alert_data.get('agent', {})
         data      = alert_data.get('data', {})
-        source_ip = data.get('srcip') or data.get('src_ip') or None
+        # في الـ ingest view بدل source_ip من data
+        source_ip = (
+            data.get('srcip') or
+            data.get('real_ip') or
+            None
+        )
 
         # استخدم .save() عشان الـ hook يشتغل
         alert = Alert(
