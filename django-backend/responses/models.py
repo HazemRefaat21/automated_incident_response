@@ -2,22 +2,6 @@ from django.db import models
 from alerts.models import Alert
 
 
-# Attack types we can map responses to. Mirrors Alert.ATTACK_TYPE_CHOICES plus
-# the extra types produced by the classifier (alerts/hooks.py).
-ATTACK_TYPE_CHOICES = [
-    ('web_attack',        'Web Attack'),
-    ('brute_force',       'Brute Force'),
-    ('sql_injection',     'SQL Injection'),
-    ('xss',               'XSS'),
-    ('traversal',         'Directory Traversal'),
-    ('command_injection', 'Command Injection'),
-    ('scanning',          'Scanning'),
-    ('dos',               'DoS'),
-    ('malware',           'Malware'),
-    ('unknown',           'Unknown'),
-]
-
-
 class ResponseDefinition(models.Model):
     """
     A reusable, dashboard-editable response in the catalog.
@@ -51,7 +35,8 @@ class AttackResponseMap(models.Model):
     Maps an attack type to a response. Create multiple rows for one attack type
     to run several responses; `order` controls execution order.
     """
-    attack_type     = models.CharField(max_length=50, choices=ATTACK_TYPE_CHOICES)
+    attack_type     = models.CharField(max_length=50,
+                                       help_text="AttackType.key this mapping responds to")
     response        = models.ForeignKey(ResponseDefinition, on_delete=models.CASCADE,
                                         related_name='mappings')
     order           = models.PositiveIntegerField(default=0,
@@ -67,7 +52,7 @@ class AttackResponseMap(models.Model):
         unique_together = ('attack_type', 'response')
 
     def __str__(self):
-        return f"{self.get_attack_type_display()} → {self.response.name}"
+        return f"{self.attack_type} → {self.response.name}"
 
 
 class ResponseAction(models.Model):
@@ -77,9 +62,17 @@ class ResponseAction(models.Model):
         ('executed', 'Executed'),
         ('failed', 'Failed'),
         ('skipped', 'Skipped'),
+        ('revoked', 'Revoked'),
+    ]
+    TRIGGER_CHOICES = [
+        ('auto', 'Automatic'),
+        ('manual', 'Manual'),
     ]
 
-    alert          = models.ForeignKey(Alert, on_delete=models.CASCADE, related_name='actions')
+    # null for manual runs that aren't tied to a specific alert
+    alert          = models.ForeignKey(Alert, on_delete=models.CASCADE, related_name='actions',
+                                       null=True, blank=True)
+    trigger        = models.CharField(max_length=10, choices=TRIGGER_CHOICES, default='auto')
     response_definition = models.ForeignKey(ResponseDefinition, on_delete=models.SET_NULL,
                                             null=True, blank=True, related_name='executions')
     action_type    = models.CharField(max_length=50, help_text="handler_key that was run")

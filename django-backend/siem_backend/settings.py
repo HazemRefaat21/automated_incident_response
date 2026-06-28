@@ -26,6 +26,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'siem_backend.middleware.AccessLogMiddleware',  # writes Apache-format access log for Wazuh
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -54,6 +55,32 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'siem_backend.wsgi.application'
+
+# Access log consumed by the Wazuh agent (Apache "combined" format).
+LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR.mkdir(exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'raw': {'format': '%(message)s'},
+    },
+    'handlers': {
+        'access_file': {
+            'class': 'logging.handlers.WatchedFileHandler',  # plays nice with logrotate
+            'filename': str(LOGS_DIR / 'django_access.log'),
+            'formatter': 'raw',
+        },
+    },
+    'loggers': {
+        'django.access': {
+            'handlers': ['access_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
 # Database
 DATABASES = {

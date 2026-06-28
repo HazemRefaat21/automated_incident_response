@@ -4,6 +4,7 @@ from django.db import models
 from django_lifecycle import LifecycleModelMixin
 from .hooks import AlertHooksMixin
 
+
 class Alert(AlertHooksMixin, LifecycleModelMixin, models.Model):
     SEVERITY_CHOICES = [
         ('low', 'Low'),
@@ -15,16 +16,6 @@ class Alert(AlertHooksMixin, LifecycleModelMixin, models.Model):
         ('new', 'New'),
         ('processing', 'Processing'),
         ('resolved', 'Resolved'),
-    ]
-    ATTACK_TYPE_CHOICES = [
-        ('web_attack', 'Web Attack'),
-        ('brute_force', 'Brute Force'),
-        ('sql_injection', 'SQL Injection'),
-        ('xss', 'XSS'),
-        ('traversal', 'Directory Traversal'),
-        ('dos', 'DoS'),
-        ('malware', 'Malware'),
-        ('unknown', 'Unknown'),
     ]
 
     wazuh_alert_id   = models.CharField(max_length=100, unique=True, null=True, blank=True)
@@ -39,7 +30,7 @@ class Alert(AlertHooksMixin, LifecycleModelMixin, models.Model):
     agent_id         = models.CharField(max_length=20, null=True, blank=True)
     agent_name       = models.CharField(max_length=100, null=True, blank=True)
 
-    attack_type      = models.CharField(max_length=50, choices=ATTACK_TYPE_CHOICES, default='unknown')
+    attack_type      = models.CharField(max_length=50, default='unknown')  # values come from classification.AttackType
     severity         = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='low')
 
     raw_log          = models.JSONField(default=dict)

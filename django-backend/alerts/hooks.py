@@ -7,42 +7,30 @@ from django_lifecycle import hook, AFTER_CREATE, AFTER_UPDATE
 
 logger = logging.getLogger(__name__)
 
-DESCRIPTION_TO_ATTACK_TYPE = [
-    ('sql injection',      'sql_injection'),
-    ('xss',                'xss'),
-    ('directory traversal','traversal'),
-    ('command injection',  'command_injection'),
-    ('ssh brute force',    'brute_force'),
-    ('ssh root',           'brute_force'),
-    ('admin panel',        'scanning'),
-    ('suspicious scanner', 'scanning'),
-    ('scanning',           'scanning'),
-]
-
-ATTACK_SCORES = {
-    'command_injection': 90,
-    'sql_injection':     85,
-    'traversal':         75,
-    'xss':               70,
-    'dos':               70,
-    'brute_force':       60,
-    'scanning':          35,
-    'unknown':           20,
-}
-
 SEVERITY_THRESHOLDS = {
     'critical': 80,
     'high':     60,
     'medium':   30,
 }
 
+# Fallback when no AttackType row matches the description.
+UNKNOWN_ATTACK = ('unknown', 20)
 
-def get_attack_type(description: str) -> str:
-    desc = description.lower()
-    for keyword, attack_type in DESCRIPTION_TO_ATTACK_TYPE:
-        if keyword in desc:
-            return attack_type
-    return 'unknown'
+
+def classify_description(description: str):
+    """Match the Wazuh rule description against dashboard-managed AttackType rows.
+
+    Returns (attack_type_key, base_score). First active row (by priority) whose
+    keyword is a substring of the description wins; falls back to 'unknown'.
+    """
+    from classification.models import AttackType
+
+    desc = (description or '').lower()
+    for at in AttackType.objects.filter(is_active=True).order_by('priority', 'key'):
+        for keyword in (at.keywords or []):
+            if keyword and keyword.lower() in desc:
+                return at.key, at.base_score
+    return UNKNOWN_ATTACK
 
 
 def get_severity(score: float) -> str:
@@ -60,8 +48,7 @@ class AlertHooksMixin:
     @hook(AFTER_CREATE)
     def on_create_classify(self):
         try:
-            attack_type = get_attack_type(self.rule_description or '')
-            base_score  = ATTACK_SCORES.get(attack_type, ATTACK_SCORES['unknown'])
+            attack_type, base_score = classify_description(self.rule_description or '')
 
             level = self.rule_level or 0
             if level >= 12:   bonus = 15
