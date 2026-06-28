@@ -2,20 +2,25 @@
 """
 Wazuh Custom Integration — Django SIEM
 بيبعت كل alert لـ Django API
+
+Uses only the Python standard library (urllib) so it never depends on
+pip packages like `requests`, which are not in the Wazuh manager image and
+get lost whenever the container is recreated.
 """
 
 import sys
 import json
-import requests
 import logging
-from datetime import datetime
+import urllib.request
+import urllib.error
 
 # =====================
 # CONFIG
 # =====================
-DJANGO_URL = "http://172.18.0.1:8000/api/alerts/ingest/"
+DJANGO_URL = "http://172.18.0.1:8001/api/alerts/ingest/"
 WAZUH_SECRET = "wazuh-django-secret-key-123"
 LOG_FILE = "/var/ossec/logs/integrations.log"
+TIMEOUT = 5
 
 # =====================
 # LOGGING
@@ -51,26 +56,27 @@ def main():
     logger.info(f"Processing alert ID: {alert_data.get('id', 'unknown')}")
 
     # إرسال لـ Django
+    payload = json.dumps(alert_data).encode('utf-8')
+    req = urllib.request.Request(
+        DJANGO_URL,
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'X-Wazuh-Secret': WAZUH_SECRET,
+        },
+        method='POST',
+    )
+
     try:
-        response = requests.post(
-            DJANGO_URL,
-            json=alert_data,
-            headers={
-                'Content-Type': 'application/json',
-                'X-Wazuh-Secret': WAZUH_SECRET,
-            },
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            logger.info(f"Alert sent successfully: {alert_data.get('id')}")
-        else:
-            logger.error(f"Django returned {response.status_code}: {response.text}")
-
-    except requests.exceptions.ConnectionError:
-        logger.error(f"Cannot connect to Django at {DJANGO_URL}")
-    except requests.exceptions.Timeout:
-        logger.error("Django request timed out")
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            if resp.status == 200:
+                logger.info(f"Alert sent successfully: {alert_data.get('id')}")
+            else:
+                logger.error(f"Django returned {resp.status}: {resp.read().decode('utf-8', 'replace')}")
+    except urllib.error.HTTPError as e:
+        logger.error(f"Django returned {e.code}: {e.read().decode('utf-8', 'replace')}")
+    except urllib.error.URLError as e:
+        logger.error(f"Cannot connect to Django at {DJANGO_URL}: {e.reason}")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
 
