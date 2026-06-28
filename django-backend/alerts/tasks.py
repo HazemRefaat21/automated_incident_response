@@ -17,6 +17,15 @@ def process_incoming_alert(alert_data: dict):
         rule      = alert_data.get('rule', {})
         agent     = alert_data.get('agent', {})
         data      = alert_data.get('data', {})
+
+        # Drop non-attack noise (PAM logins, sudo, etc.) — only ingest alerts
+        # that match a known AttackType. Keywords are dashboard-managed.
+        from alerts.hooks import classify_description, UNKNOWN_ATTACK
+        attack_type, _ = classify_description(rule.get('description', ''))
+        if attack_type == UNKNOWN_ATTACK[0]:
+            logger.info(f"Skipping non-attack alert {wazuh_id}: {rule.get('description', '')!r}")
+            return {'status': 'skipped', 'reason': 'not-attack-relevant'}
+
         # في الـ ingest view بدل source_ip من data
         source_ip = (
             data.get('srcip') or

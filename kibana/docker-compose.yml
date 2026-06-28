@@ -1,0 +1,63 @@
+# Standalone Elasticsearch + Kibana for the SIEM dashboard.
+#
+# This is SEPARATE from the Wazuh stack:
+#   - Wazuh Indexer (OpenSearch) stays on host port 9200  -> untouched
+#   - Wazuh Dashboard stays on host port 443               -> untouched
+#   - This Elasticsearch is exposed on host port 9201
+#   - This Kibana is exposed on host port 5601
+#
+# Security is disabled because this runs locally and Django talks to it over the
+# loopback interface. Harden (enable xpack.security + TLS + creds) before exposing
+# it off-box.
+#
+# Start:   docker compose -f kibana/docker-compose.yml up -d
+# Stop:    docker compose -f kibana/docker-compose.yml down
+name: siem-kibana
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: siem-elasticsearch
+    environment:
+      - node.name=siem-es
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9201:9200"   # host 9201 -> container 9200 (loopback only)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    restart: always
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: siem-kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=siem-kibana
+    ports:
+      - "0.0.0.0:5601:5601"     # Kibana UI at http://<host>:5601
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:5601/api/status || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+    restart: always
+
+volumes:
+  es-data:
+    driver: local

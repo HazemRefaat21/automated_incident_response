@@ -22,8 +22,16 @@ INSTALLED_APPS = [
     'alerts',
     'responses',
     'classification',
+    'search',
     'django_tasks_db',
 ]
+
+# Elasticsearch / Kibana — standalone stack (kibana/docker-compose.yml).
+# Separate from the Wazuh Indexer; Django mirrors alerts + responses here so
+# Kibana can visualize them.
+ES_ENABLED = config('ES_ENABLED', default=True, cast=bool)
+ES_URL     = config('ES_URL', default='http://localhost:9201')
+ES_TIMEOUT = config('ES_TIMEOUT', default=5, cast=int)
 
 MIDDLEWARE = [
     'siem_backend.middleware.AccessLogMiddleware',  # writes Apache-format access log for Wazuh
@@ -142,3 +150,9 @@ TASKS = {
         "BACKEND": "django_tasks_db.DatabaseBackend"
     }
 }
+
+# Auto-run the django-tasks DB worker in a background thread when the app boots,
+# so enqueued response tasks are consumed without a separate `manage.py db_worker`
+# process. Set RUN_TASK_WORKER=false to disable (e.g. when running a dedicated
+# worker process in production).
+RUN_TASK_WORKER = config('RUN_TASK_WORKER', default=True, cast=bool)
