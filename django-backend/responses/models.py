@@ -2,20 +2,87 @@ from django.db import models
 from alerts.models import Alert
 
 
+# Attack types we can map responses to. Mirrors Alert.ATTACK_TYPE_CHOICES plus
+# the extra types produced by the classifier (alerts/hooks.py).
+ATTACK_TYPE_CHOICES = [
+    ('web_attack',        'Web Attack'),
+    ('brute_force',       'Brute Force'),
+    ('sql_injection',     'SQL Injection'),
+    ('xss',               'XSS'),
+    ('traversal',         'Directory Traversal'),
+    ('command_injection', 'Command Injection'),
+    ('scanning',          'Scanning'),
+    ('dos',               'DoS'),
+    ('malware',           'Malware'),
+    ('unknown',           'Unknown'),
+]
+
+
+class ResponseDefinition(models.Model):
+    """
+    A reusable, dashboard-editable response in the catalog.
+
+    `handler_key` points at a function registered with @register_response in
+    response_worker/handlers/. The actual code lives there; this row just
+    selects it and supplies default params.
+    """
+    name        = models.CharField(max_length=100, unique=True)
+    handler_key = models.CharField(
+        max_length=50,
+        help_text="Key of a registered response handler (e.g. block_ip, kill_process, notify)",
+    )
+    description = models.TextField(blank=True)
+    params      = models.JSONField(default=dict, blank=True,
+                                   help_text="Default params passed to the handler, e.g. {\"duration_hours\": 24}")
+    is_active   = models.BooleanField(default=True)
+
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.handler_key})"
+
+
+class AttackResponseMap(models.Model):
+    """
+    Maps an attack type to a response. Create multiple rows for one attack type
+    to run several responses; `order` controls execution order.
+    """
+    attack_type     = models.CharField(max_length=50, choices=ATTACK_TYPE_CHOICES)
+    response        = models.ForeignKey(ResponseDefinition, on_delete=models.CASCADE,
+                                        related_name='mappings')
+    order           = models.PositiveIntegerField(default=0,
+                                                  help_text="Lower runs first")
+    params_override = models.JSONField(default=dict, blank=True,
+                                       help_text="Optional params merged over the response's defaults")
+    is_active       = models.BooleanField(default=True)
+
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['attack_type', 'order']
+        unique_together = ('attack_type', 'response')
+
+    def __str__(self):
+        return f"{self.get_attack_type_display()} → {self.response.name}"
+
+
 class ResponseAction(models.Model):
-    ACTION_CHOICES = [
-        ('block_ip', 'Block IP'),
-        ('kill_process', 'Kill Process'),
-        ('alert_only', 'Alert Only'),
-    ]
+    """Log of an individual response that was executed for an alert."""
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('executed', 'Executed'),
         ('failed', 'Failed'),
+        ('skipped', 'Skipped'),
     ]
 
     alert          = models.ForeignKey(Alert, on_delete=models.CASCADE, related_name='actions')
-    action_type    = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    response_definition = models.ForeignKey(ResponseDefinition, on_delete=models.SET_NULL,
+                                            null=True, blank=True, related_name='executions')
+    action_type    = models.CharField(max_length=50, help_text="handler_key that was run")
     target         = models.CharField(max_length=100)
     status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     executed_at    = models.DateTimeField(null=True, blank=True)
